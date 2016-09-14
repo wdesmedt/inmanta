@@ -93,29 +93,9 @@ In this section we will use the configuration concepts defined in the existing m
 
 First, create a new ``main.cf`` file:
 
-.. code-block:: ruby
+.. literalinclude:: examples/quickstart1.snip
+    :language: ruby
     :linenos:
-
-    import ip
-    import redhat
-    import apache
-    import mysql
-    import web
-    import drupal
-
-    # define the machine we want to deploy Drupal on
-    vm1=ip::Host(name="vm1", os=redhat::fedora23, ip="192.168.33.101")
-
-    # add a mysql and apache http server
-    web_server=apache::Server(host=vm1)
-    mysql_server=mysql::Server(host=vm1)
-
-    # deploy drupal in that virtual host
-    name=web::Alias(hostname="localhost")
-    db=mysql::Database(server=mysql_server, name="drupal_test", user="drupal_test",
-                       password="Str0ng-P433w0rd")
-    drupal::Application(name=name, container=web_server, database=db, admin_user="admin",
-                        admin_password="test", admin_email="admin@example.com", site_name="localhost")
 
 
 * Lines 1-6 import all required packages.  
@@ -177,25 +157,11 @@ A second virtual machine is easily added to the system by adding the definition
 of the virtual machine to the configuration model and assigning the MySQL server
 to the new virtual machine.
 
-.. code-block:: ruby
+.. literalinclude:: examples/quickstart2.snip
+    :language: ruby
     :linenos:
-
-    # define the machine we want to deploy Drupal on
-    vm1=ip::Host(name="vm1", os=redhat::fedora23, ip="192.168.33.101")
-    vm2=ip::Host(name="vm2", os=redhat::fedora23, ip="192.168.33.102")
-
-    # add a mysql and apache http server
-    web_server=apache::Server(host=vm1)
-    mysql_server=mysql::Server(host=vm2)
-
-    # deploy drupal in that virtual host
-    name=web::Alias(hostname="localhost")
-    db=mysql::Database(server=mysql_server, name="drupal_test", user="drupal_test",
-                       password="Str0ng-P433w0rd")
-    drupal::Application(name=name, container=web_server, database=db, admin_user="admin",
-                        admin_password="test", admin_email="admin@example.com", site_name="localhost")
-
-On line 3 the definition of the new virtual machine is added. On line 7 the
+    
+On line 10 the definition of the new virtual machine is added. On line 14 the
 MySQL server is assigned to vm2.
 
 Deploy the configuration model
@@ -270,11 +236,8 @@ The following commands create all directories and files to develop a full-featur
 
 Next, edit the ``lamp/module.yml`` file and add meta-data to it:
 
-.. code-block:: yaml
-
-    name: lamp
-    license: Apache 2.0
-    version: 0.1
+.. literalinclude:: examples/quickstart3/libs/lamp/module.yml
+    :language: yaml
 
 
 Configuration model
@@ -283,42 +246,9 @@ Configuration model
 In ``lamp/model/_init.cf`` we define the configuration model that defines the *lamp*
 configuration module.
 
-.. code-block:: ruby
+.. literalinclude:: examples/quickstart3/libs/lamp/model/_init.cf
+    :language: ruby
     :linenos:
-
-    import ip
-    import apache
-    import mysql
-    import web
-    import drupal
-    
-    entity DrupalStack:
-        string hostname
-        string admin_user
-        string admin_password
-        string admin_email
-        string site_name
-    end
-
-    index DrupalStack(hostname)
-
-    ip::Host webhost [1] -- [0:1] DrupalStack drupal_stack_webhost
-    ip::Host mysqlhost [1] -- [0:1] DrupalStack drupal_stack_mysqlhost
-
-    implementation drupalStackImplementation for DrupalStack:
-        # add a mysql and apache http server
-        web_server=apache::Server(host=webhost)
-        mysql_server=mysql::Server(host=mysqlhost)
-
-        # deploy drupal in that virtual host
-        name=web::Alias(hostname=hostname)
-        db=mysql::Database(server=mysql_server, name="drupal_test", user="drupal_test",
-                           password="Str0ng-P433w0rd")
-        drupal::Application(name=name, container=web_server, database=db, admin_user=admin_user,
-                            admin_password=admin_password, admin_email=admin_email, site_name=site_name)
-    end
-
-    implement DrupalStack using drupalStackImplementation
 
 * Lines 1 to 7 define an entity which is the definition of a *concept* in the configuration model. On lines 2 and 6 typed attributes are defined which we can later on use in the implementation of an entity instance.
 * Line 9 defines that *hostname* is an identifying attribute for instances of the DrupalStack entity. This also means that all instances of DrupalStack need to have a unique *hostname* attribute.
@@ -339,18 +269,9 @@ With our new LAMP module we can reduce the amount of required configuration code
 by using more *reusable* configuration code. Only three lines of site-specific configuration code are
 required.
 
-.. code-block:: ruby
+.. literalinclude:: examples/quickstart3/main.cf
+    :language: ruby
     :linenos:
-    import ip
-    import redhat
-    import lamp
-    
-    # define the machine we want to deploy Drupal on
-    vm1=ip::Host(name="vm1", os=redhat::fedora23, ip="192.168.33.101")
-    vm2=ip::Host(name="vm2", os=redhat::fedora23, ip="192.168.33.102")
-
-    lamp::DrupalStack(webhost=vm1, mysqlhost=vm2, hostname="localhost", admin_user="admin",
-                      admin_password="test", admin_email="admin@example.com", site_name="localhost")
 
 
 Deploy the changes

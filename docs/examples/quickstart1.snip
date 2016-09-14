@@ -1,0 +1,20 @@
+import ip
+import redhat
+import apache
+import mysql
+import web
+import drupal
+
+# define the machine we want to deploy Drupal on
+vm1=ip::Host(name="vm1", os=redhat::fedora23, ip="192.168.33.101")
+
+# add a mysql and apache http server
+web_server=apache::Server(host=vm1)
+mysql_server=mysql::Server(host=vm1)
+
+# deploy drupal in that virtual host
+name=web::Alias(hostname="localhost")
+db=mysql::Database(server=mysql_server, name="drupal_test", user="drupal_test",
+                   password="Str0ng-P433w0rd")
+drupal::Application(name=name, container=web_server, database=db, admin_user="admin",
+                    admin_password="test", admin_email="admin@example.com", site_name="localhost")

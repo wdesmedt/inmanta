@@ -42,23 +42,25 @@ class SnipDirItem(pytest.Item):
         if os.path.exists(env):
             os.remove(env)
         os.symlink(shared_env, env)
-
-        project = os.path.join(project_dir, "project.yml")
-        if os.path.exists(project):
+        try:
+            project = os.path.join(project_dir, "project.yml")
+            if os.path.exists(project):
+                os.remove(project)
+            with open(project, "w") as cfg:
+                cfg.write(
+                    """
+                name: snippet test
+                modulepath: [libs,%s]
+                downloadpath: %s
+                version: 1.0
+                repo: ['https://github.com/inmanta/']"""
+                    % (shared_libs, shared_libs))
+    
+            Project.set(Project(project_dir))
+            compiler.do_compile()
             os.remove(project)
-        with open(project, "w") as cfg:
-            cfg.write(
-                """
-            name: snippet test
-            modulepath: [libs,%s]
-            downloadpath: %s
-            version: 1.0
-            repo: ['git@git.inmanta.com:modules/', 'git@git.inmanta.com:config/']"""
-                % (shared_libs, shared_libs))
-
-        Project.set(Project(project_dir))
-        compiler.do_compile()
-        os.remove(project)
+        finally:
+            os.remove(env)
         
     def runtest(self):
         self.run_project(self.filename)
@@ -72,23 +74,28 @@ class SnipFileItem(pytest.Item):
         
     def run_snippet(self, snippet):
         project_dir = tempfile.mkdtemp()
-        os.symlink(shared_env, os.path.join(project_dir, ".env"))
-
-        with open(os.path.join(project_dir, "project.yml"), "w") as cfg:
-            cfg.write(
-                """
-            name: snippet test
-            modulepath: %s
-            downloadpath: %s
-            version: 1.0
-            repo: ['https://github.com/inmanta/']"""
-                % (shared_libs, shared_libs))
-
-        with open(os.path.join(project_dir, "main.cf"), "w") as x:
-            x.write(snippet)
-
-        Project.set(Project(project_dir))
-        compiler.do_compile()
+        env = os.path.join(project_dir, ".env")
+        os.symlink(shared_env, env)
+        
+        try:
+            with open(os.path.join(project_dir, "project.yml"), "w") as cfg:
+                cfg.write(
+                    """
+                name: snippet test
+                modulepath: %s
+                downloadpath: %s
+                version: 1.0
+                repo: ['https://github.com/inmanta/']"""
+                    % (shared_libs, shared_libs))
+    
+            with open(os.path.join(project_dir, "main.cf"), "w") as x:
+                x.write(snippet)
+    
+            Project.set(Project(project_dir))
+            compiler.do_compile()
+        finally:
+            os.remove(env)
+        
 
     def runtest(self):
         self.run_snippet(self.filename.read())

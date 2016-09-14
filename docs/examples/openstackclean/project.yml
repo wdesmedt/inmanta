@@ -1,0 +1,6 @@
+
+                name: snippet test
+                modulepath: [libs,/tmp/tmpelnpwlj2]
+                downloadpath: /tmp/tmpelnpwlj2
+                version: 1.0
+                repo: ['https://github.com/inmanta/']
