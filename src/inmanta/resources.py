@@ -35,9 +35,9 @@ class resource(object):
     """
     _resources = {}
 
-    def __init__(self, name, id_attribute, agent):
+    def __init__(self, name, id_attribute, agent, grouping_gain=0):
         self._cls_name = name
-        self._options = {"agent": agent, "name": id_attribute}
+        self._options = {"agent": agent, "name": id_attribute, "grouping_gain": grouping_gain}
 
     def __call__(self, cls):
         """
@@ -66,6 +66,13 @@ class resource(object):
             return cls._resources[name]
 
         return (None, None)
+
+    @classmethod
+    def get_grouping_gain(cls, name):
+        """
+        Get the class definition for the given imp entity.
+        """
+        return cls.get_class(name)[1]["grouping_gain"]
 
     @classmethod
     def sources(cls) -> dict:
