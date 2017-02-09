@@ -280,9 +280,9 @@ class RuntimeException(CompilerException):
 
 class TypeNotFoundException(RuntimeException):
 
-    def __init__(self, type, ns):
-        RuntimeException.__init__(self, stmt=None, msg="could not find type %s in namespace %s" % (type, ns))
-        self.type = type
+    def __init__(self, mytype, ns):
+        RuntimeException.__init__(self, stmt=None, msg="could not find mytype %s in namespace %s" % (mytype, ns))
+        self.type = mytype
         self.ns = ns
 
 
