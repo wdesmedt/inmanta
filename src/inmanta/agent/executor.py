@@ -36,7 +36,7 @@ class ResourceActionResult(object):
         self.reload = reload
         self.cancel = cancel
 
-    def __add__(self, other: ResourceActionResult) -> ResourceActionResult:
+    def __add__(self, other: "ResourceActionResult") -> "ResourceActionResult":
         return ResourceActionResult(self.success and other.success,
                                     self.reload or other.reload,
                                     self.cancel or other.cancel)
