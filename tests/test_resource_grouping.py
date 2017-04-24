@@ -19,24 +19,26 @@ import re
 
 from inmanta.resources import resource, Resource
 from inmanta.agent import grouping
+from _pytest.fixtures import fixture
 
 
-@resource("test::Alpha", agent="agent", id_attribute="name", grouping_gain=120)
-class AlphaResource(Resource):
-    fields = ("agent", "name")
+@fixture(scope="function")
+def resource_container():
+
+    @resource("test::Alpha", agent="agent", id_attribute="name", grouping_gain=120)
+    class AlphaResource(Resource):
+        fields = ("agent", "name")
+
+    @resource("test::Beta", agent="agent", id_attribute="name", grouping_gain=10)
+    class BetaResource(Resource):
+        fields = ("agent", "name")
+
+    @resource("test::Gamma", agent="agent", id_attribute="name")
+    class GammaResource(Resource):
+        fields = ("agent", "name")
 
 
-@resource("test::Beta", agent="agent", id_attribute="name", grouping_gain=10)
-class BetaResource(Resource):
-    fields = ("agent", "name")
-
-
-@resource("test::Gamma", agent="agent", id_attribute="name")
-class GammaResource(Resource):
-    fields = ("agent", "name")
-
-
-def expandToGraph(inp):
+def expand_to_graph(inp):
     """expect graph input in the form
             A1: B1 B2
     """
@@ -74,6 +76,7 @@ def expandToGraph(inp):
             'agent': 'agent1',
             'id': id_for(k),
             'requires': [id_for(val) for val in vs],
+            'send_event': False
         })
 
     return out
@@ -120,7 +123,7 @@ def dot_out_mg(graph):
     return "digraph test {\n %s }" % out
 
 
-def assertGraph(graph, expected):
+def assert_graph(graph, expected):
     lines = ["%s: %s" % (f.short_id(), t.short_id()) for f in graph for t in f.requires]
     lines = sorted(lines)
 
@@ -130,18 +133,18 @@ def assertGraph(graph, expected):
     assert elines == lines
 
 
-def test_A_B_Grouping():
-    ing = expandToGraph(""" A1: B1
+def test_a_b_grouping(resource_container):
+    ing = expand_to_graph(""" A1: B1
                             B2: A2
                             A3: B3
                             B4: A4""")
     grouped = grouping.group(deserialize(ing))
-    assertGraph(grouped, """ A1A2A3A4: B1B3
+    assert_graph(grouped, """ A1A2A3A4: B1B3
                                  B2B4: A1A2A3A4""")
 
 
-def test_larger():
-    ing = deserialize(expandToGraph("""C2: B6 A8
+def test_larger(resource_container):
+    ing = deserialize(expand_to_graph("""C2: B6 A8
     C1: B5
     B5: A4
     A4: B2
@@ -157,7 +160,7 @@ def test_larger():
     A7: A3
     A3: A2"""))
     grouped = grouping.group(ing)
-    assertGraph(grouped, """C1: B5B6
+    assert_graph(grouped, """C1: B5B6
     C2: B5B6
     C2: A8
     B5B6: A3A4A5A6
