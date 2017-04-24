@@ -25,11 +25,11 @@ from _pytest.fixtures import fixture
 @fixture(scope="function")
 def resource_container():
 
-    @resource("test::Alpha", agent="agent", id_attribute="name", grouping_gain=120)
+    @resource("test::Alpha", agent="agent", id_attribute="name", groupable=True)
     class AlphaResource(Resource):
         fields = ("agent", "name")
 
-    @resource("test::Beta", agent="agent", id_attribute="name", grouping_gain=10)
+    @resource("test::Beta", agent="agent", id_attribute="name", groupable=True)
     class BetaResource(Resource):
         fields = ("agent", "name")
 
@@ -41,6 +41,8 @@ def resource_container():
 def expand_to_graph(inp):
     """expect graph input in the form
             A1: B1 B2
+
+        D is cross agent
     """
     lines = inp.split("\n")
 
@@ -54,6 +56,7 @@ def expand_to_graph(inp):
             raise Exception("Bad test case")
         parts[k] = v
         all_nodes.add(k)
+        v = [vx for vx in v if "D" not in vx]
         all_nodes.update(set(v))
 
     terminals = all_nodes.difference(parts.keys())
@@ -63,17 +66,22 @@ def expand_to_graph(inp):
 
     out = []
 
-    types = {"A": "test::Alpha", "B": "test::Beta", "C": "test::Gamma"}
+    types = {"A": "test::Alpha", "B": "test::Beta", "C": "test::Gamma", "D": "test::Alpha"}
+
+    def get_agent_for(k):
+        if k[0] == "D":
+            return "agent2"
+        return "agent1"
 
     def id_for(k):
         mytype = types[k[0]]
-        return '%s[agent1,name=%s],v=5' % (mytype, k)
+        return '%s[%s,name=%s],v=5' % (mytype, get_agent_for(k), k)
 
     for k, vs in parts.items():
 
         out.append({
             'name': k,
-            'agent': 'agent1',
+            'agent': get_agent_for(k),
             'id': id_for(k),
             'requires': [id_for(val) for val in vs],
             'send_event': False
@@ -124,7 +132,7 @@ def dot_out_mg(graph):
 
 
 def assert_graph(graph, expected):
-    lines = ["%s: %s" % (f.short_id(), t.short_id()) for f in graph for t in f.requires]
+    lines = ["%s: %s" % (f.short_id(), t.short_id()) for f in graph for t in f.requires if not f.is_CAD()]
     lines = sorted(lines)
 
     elines = [x.strip() for x in expected.split("\n")]
@@ -138,9 +146,21 @@ def test_a_b_grouping(resource_container):
                             B2: A2
                             A3: B3
                             B4: A4""")
-    grouped = grouping.group(deserialize(ing))
+    grouped = grouping.group(deserialize(ing), "agent1")
     assert_graph(grouped, """ A1A2A3A4: B1B3
                                  B2B4: A1A2A3A4""")
+
+
+def test_a_b_grouping_CAD(resource_container):
+    ing = expand_to_graph(""" A1: B1
+                            B2: A2 D1
+                            A3: B3 D1
+                            B4: A4""")
+    grouped = grouping.group(deserialize(ing), "agent1")
+    assert_graph(grouped, """ A1A2A3A4: B1B3
+                              A1A2A3A4: D1
+                                 B2B4: A1A2A3A4
+                                 B2B4: D1""")
 
 
 def test_larger(resource_container):
@@ -159,7 +179,7 @@ def test_larger(resource_container):
     A8: A7
     A7: A3
     A3: A2"""))
-    grouped = grouping.group(ing)
+    grouped = grouping.group(ing, "agent1")
     assert_graph(grouped, """C1: B5B6
     C2: B5B6
     C2: A8

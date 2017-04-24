@@ -24,7 +24,7 @@ from tornado import gen
 from tornado.concurrent import Future
 
 from inmanta import const
-from inmanta.agent import handler
+from inmanta.agent import handler, grouping
 from inmanta.agent.cache import AgentCache
 
 
@@ -266,6 +266,9 @@ class ResourceScheduler(object):
             ra.cancel()
 
         gid = uuid.uuid4()
+
+        grouped = grouping.group(resources)
+
         self.generation = {r.id.resource_str(): ResourceAction(self, r, gid) for r in resources}
 
         cross_agent_dependencies = [q for r in resources for q in r.requires if q.get_agent_name() != self.name]

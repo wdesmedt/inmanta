@@ -35,9 +35,9 @@ class resource(object):  # noqa: H801
     """
     _resources = {}
 
-    def __init__(self, name, id_attribute, agent, grouping_gain=0):
+    def __init__(self, name, id_attribute, agent, groupable=False):
         self._cls_name = name
-        self._options = {"agent": agent, "name": id_attribute, "grouping_gain": grouping_gain}
+        self._options = {"agent": agent, "name": id_attribute, "groupable": groupable}
 
     def __call__(self, cls):
         """
@@ -68,11 +68,11 @@ class resource(object):  # noqa: H801
         return (None, None)
 
     @classmethod
-    def get_grouping_gain(cls, name):
+    def can_group(cls, name):
         """
-        Get the class definition for the given imp entity.
+        can the resource with the given name be grouped?
         """
-        return cls.get_class(name)[1]["grouping_gain"]
+        return cls.get_class(name)[1]["groupable"]
 
     @classmethod
     def sources(cls) -> dict:

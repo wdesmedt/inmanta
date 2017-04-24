@@ -58,13 +58,47 @@ class Node(object):
         names = [r.id.get_attribute_value() for r in self.resources]
         return "".join(sorted(names))
 
+    def is_CAD(self):
+        return False
 
-def group(inr):
+
+class CADNode(Node):
+
+    def __init__(self, id):
+        super(CADNode, self).__init__(None, "CAD")
+        self.id = id
+        self.requires = set()
+
+    def index(self, index):
+        index[self.id.resource_str()] = self
+
+    def link(self, index):
+        pass
+
+    def depth_for(self, mytype):
+        return 0
+
+    def is_CAD(self):
+        return True
+
+    def short_id(self):
+        return self.id.get_attribute_value()
+
+    def __repr__(self):
+        return "N:" + self.id.resource_str()
+
+
+def group(inr, agent):
     types = set([res.id.get_entity_type() for res in inr])
-    types = [t for t in types if resources.resource.get_grouping_gain(t) > 0]
-    types = sorted(types, key=lambda t: -resources.resource.get_grouping_gain(t))
+    types = [t for t in types if resources.resource.can_group(t) > 0]
+    types = sorted(types)
 
     wrapped = [Node([n], n.id.get_entity_type()) for n in inr]
+
+    # cross agent deps (ID instead of resource)
+    cads = {dep.resource_str(): dep for res in inr for dep in res.requires if dep.get_agent_name() != agent}
+
+    wrapped.extend([CADNode(n) for n in cads.values()])
 
     for mytype in types:
         wrapped = group_for_type(wrapped, mytype)
