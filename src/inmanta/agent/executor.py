@@ -26,6 +26,7 @@ from tornado.concurrent import Future
 from inmanta import const
 from inmanta.agent import handler, grouping
 from inmanta.agent.cache import AgentCache
+from inmanta.agent.grouping import Node
 
 
 LOGGER = logging.getLogger(__name__)
@@ -49,9 +50,11 @@ class ResourceActionResult(object):
 
 class ResourceAction(object):
 
-    def __init__(self, scheduler, resource, gid):
+    def __init__(self, scheduler, resource, gid, requires):
         """
             :param gid A unique identifier to identify a deploy. This is local to this agent.
+            :param resource The resource to handle
+            :param requires A list of identifiers for the requirements
         """
         self.scheduler = scheduler
         self.resource = resource
@@ -63,6 +66,7 @@ class ResourceAction(object):
         self.status = None
         self.change = None
         self.changes = None
+        self.requires = requires
 
     def is_running(self):
         return self.running
@@ -122,7 +126,7 @@ class ResourceAction(object):
         LOGGER.log(const.LogLevel.TRACE.value, "Entering %s %s", self.gid, self.resource)
         cache.open_version(self.resource.id.version)
 
-        self.dependencies = [generation[x.resource_str()] for x in self.resource.requires]
+        self.dependencies = [generation[x] for x in self.requires]
         waiters = [x.future for x in self.dependencies]
         waiters.append(dummy.future)
         results = yield waiters
@@ -197,10 +201,59 @@ class ResourceAction(object):
         return "%s awaits %s" % (self.resource.id.resource_str(), " ".join([str(aw) for aw in self.dependencies]))
 
 
+class GroupedResourceAction(ResourceAction):
+
+    def __init__(self, scheduler, node: Node, gid):
+        super(GroupedResourceAction, self).__init__(scheduler, node.resources[0], gid, node.get_requires_ids())
+        self.resources = node.resources
+
+    @gen.coroutine
+    def _execute(self, ctx: handler.HandlerContext, events: dict, cache: AgentCache) -> (bool, bool):
+        """
+            :param ctx The context to use during execution of this deploy
+            :param events Possible events that are available for this resource
+            :param cache The cache instance to use
+            :return (success, send_event) Return whether the execution was successful and whether a change event should be sent
+                                          to provides of this resource.
+        """
+        ctx.debug("Start deploy %(deploy_id)s of resource %(resource_id)s",
+                  deploy_id=self.gid, resource_id=self.resource_id)
+        provider = None
+
+        try:
+            provider = handler.Commander.get_provider(cache, self.scheduler.agent, self.resource)
+            provider.set_cache(cache)
+        except Exception:
+            if provider is not None:
+                provider.close()
+
+            cache.close_version(self.resource.id.version)
+            ctx.set_status(const.ResourceState.unavailable)
+            ctx.exception("Unable to find a handler for %(resource_id)s", resource_id=str(self.resource.id))
+            return False, False
+
+        yield self.scheduler.agent.thread_pool.submit(provider.execute_group, ctx, self.resources)
+
+        if ctx.status is not const.ResourceState.deployed:
+            provider.close()
+            cache.close_version(self.resource.id.version)
+            return False, False
+
+        if len(events) > 0 and provider.can_process_events():
+            ctx.info("Sending events to %(resource_id)s because of modified dependencies", resource_id=str(self.resource.id))
+            yield self.scheduler.agent.thread_pool.submit(provider.process_events, ctx, self.resource, events)
+
+        provider.close()
+        cache.close_version(self.resource_id.version)
+
+        send_event = (ctx.changed and hasattr(self.resource, "send_event") and self.resource.send_event)
+        return True, send_event
+
+
 class RemoteResourceAction(ResourceAction):
 
     def __init__(self, scheduler, resource_id, gid):
-        super(RemoteResourceAction, self).__init__(scheduler, None, gid)
+        super(RemoteResourceAction, self).__init__(scheduler, None, gid, [])
         self.resource_id = resource_id
 
     @gen.coroutine
@@ -267,17 +320,26 @@ class ResourceScheduler(object):
 
         gid = uuid.uuid4()
 
-        grouped = grouping.group(resources)
+        grouped = grouping.group(resources, self.name)
 
-        self.generation = {r.id.resource_str(): ResourceAction(self, r, gid) for r in resources}
+        def get_resource_action(node):
+            if node.is_CAD():
+                # cross agent dependency
+                myid = node.id
+                ra = RemoteResourceAction(self, myid, gid)
+                self.cad[str(myid)] = ra
+                return (myid.resource_str(), ra)
+            elif len(node.resources) == 1:
+                # normal node
+                resource = node.resources[0]
+                return (resource.id.resource_str(), ResourceAction(self, resource, gid, node.get_requires_ids()))
+            else:
+                # grouped execution
+                return (node.resource_str(), GroupedResourceAction(self, node, gid))
 
-        cross_agent_dependencies = [q for r in resources for q in r.requires if q.get_agent_name() != self.name]
-        for cad in cross_agent_dependencies:
-            ra = RemoteResourceAction(self, cad, gid)
-            self.cad[str(cad)] = ra
-            self.generation[cad.resource_str()] = ra
+        self.generation = {k: v for k, v in [get_resource_action(r) for r in grouped]}
 
-        dummy = ResourceAction(self, None, gid)
+        dummy = ResourceAction(self, None, gid, [])
         for r in self.generation.values():
             r.execute(dummy, self.generation, self.cache)
         dummy.future.set_result(ResourceActionResult(True, False, False))

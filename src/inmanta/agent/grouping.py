@@ -58,8 +58,15 @@ class Node(object):
         names = [r.id.get_attribute_value() for r in self.resources]
         return "".join(sorted(names))
 
+    def resource_str(self):
+        names = [r.id.resource_str() for r in self.resources]
+        return "".join(sorted(names))
+
     def is_CAD(self):
         return False
+
+    def get_requires_ids(self):
+        return [n.resource_str() for n in self.requires]
 
 
 class CADNode(Node):
@@ -83,6 +90,9 @@ class CADNode(Node):
 
     def short_id(self):
         return self.id.get_attribute_value()
+
+    def resource_str(self):
+        return self.id.resource_str()
 
     def __repr__(self):
         return "N:" + self.id.resource_str()
