@@ -448,6 +448,12 @@ class Project(ModuleLike):
                 LOGGER.warning("Invallid value for install_mode, should be one of [%s]" % ','.join(INSTALL_OPTS))
             else:
                 self._install_mode = mode
+        self.load_base_package()
+
+    def load_base_package(self):
+        os.makedirs("/tmp/inmanta_plugins", exist_ok=True)
+        open("/tmp/inmanta_plugins/__init__.py", "w").close()
+        imp.load_package("inmanta_plugins", "/tmp/inmanta_plugins")
 
     @classmethod
     def get_project_dir(cls, cur_dir):
